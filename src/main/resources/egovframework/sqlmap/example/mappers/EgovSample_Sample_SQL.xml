@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="egovframework.example.sample.service.impl.SampleMapper">
+
+	<resultMap id="sample" type="egovframework.example.sample.service.SampleVO">
+		<result property="id" column="id"/>
+		<result property="itemId" column="item_id"/>
+		<result property="itemName" column="item_name"/>
+		<result property="priceOpen" column="price_open"/>
+		<result property="priceHigh" column="price_high"/>
+		<result property="priceLow" column="price_low"/>
+		<result property="priceClose" column="price_close"/>
+		<result property="volume" column="volume"/>
+		<result property="dealDate" column="deal_date"/>
+		<result property="priceAvg5" column="price_avg5"/>
+		<result property="priceAvg10" column="price_avg10"/>
+		<result property="priceAvg20" column="price_avg20"/>
+		<result property="priceAvg60" column="price_avg60"/>
+		<result property="priceAvg120" column="price_avg_120"/>
+		<result property="compared1" column="compared1"/>
+		<result property="compared2" column="compared2"/>
+		<result property="compared3" column="compared3"/>
+		<result property="fluctuation" column="fluctuation"/>
+		<result property="volumeAvg5" column="volume_avg5"/>
+		<result property="volumeAvg20" column="volume_avg20"/>
+		<result property="volumeAvg60" column="volume_avg60"/>
+		<result property="volumeAvg120" column="volume_avg120"/>
+	</resultMap>
+
+	<insert id="insertSample" parameterType="SampleVO">
+
+			INSERT INTO ITEM
+				( id
+				   )
+			VALUES ( #{id}
+				   )
+
+	</insert>
+
+	<update id="updateSample">
+
+			UPDATE ITEM
+			SET id=#{id}
+				  WHERE id=#{id}
+
+	</update>
+
+	<delete id="deleteSample">
+
+			DELETE FROM ITEM
+			WHERE id=#{id}
+
+	</delete>
+
+	<select id="selectSample" resultMap="sample">
+
+			SELECT
+				*
+			FROM 
+			item
+			WHERE
+			item_id=#{itemId}
+
+	</select>
+
+	<select id="selectSampleList" parameterType="searchVO" resultType="egovMap">
+		SELECT
+			item_id
+			, item_name
+			, deal_date
+			, price_open
+			, price_high
+			, price_low
+			, price_close
+			, floor(volume) volume
+			, compared1
+			, compared2
+			, compared3
+			, ROUND(((price_close-compared2) / compared2 *100),2) as fluctuation
+			FROM(select
+					i.item_id
+					, i.item_name
+					, p.deal_date
+					, p.price_open
+					, p.price_high
+					, p.price_low
+					, p.price_close
+					, volume
+					, lag(p.deal_date,1) over(partition by i.item_id order by p.deal_date) as compared1
+					, lag(p.price_close,1) over(partition by i.item_id order by p.deal_date) as compared2
+					, p.price_close - lag(p.price_close,1) over(partition by i.item_id order by p.deal_date) as compared3
+					from
+					item as i
+					JOIN item_price as p
+					on i.item_id = p.item_id
+			) t1
+			WHERE 1=1
+			 <!-- <if test="searchKeyword != null and searchKeyword != ''"> --> 
+		        <choose>
+		            <when test="searchCondition == 2">
+		            	  AND	(item_name LIKE CONCAT('%', #{searchKeyword}, '%') OR item_id LIKE CONCAT('%', #{searchKeyword}, '%'))
+					</when>
+				</choose>
+				<choose>
+					<when test="searchCondition2 != null and searchCondition2 != ''">
+						 AND  DATE_FORMAT( deal_date, '%Y%m%d')= #{searchCondition2}
+					</when>
+				</choose>
+				
+			 <!-- </if> --> 
+			LIMIT #{recordCountPerPage} OFFSET #{firstIndex}
+	</select>
+	
+	<select id="selectSampleList2" parameterType="searchVO" resultType="egovMap"><!-- 전일대비 등락률 쓰려고 한거 -->
+		SELECT 
+			 i.item_id
+		   , i.item_name
+		   , p.deal_date
+		   , p.price_open
+		   , p.price_high
+			, p.price_low
+		   , p.price_close
+			, p.price_avg5
+		   , p.price_avg10
+		   , p.price_avg20
+		   , p.price_avg60
+		   , p.price_avg_120
+		   , p.volume
+		   , p.volume_avg5
+		   , p.volume_avg20
+		   , p.volume_avg60
+		   , p.volume_avg120
+		FROM
+		item as i
+		JOIN item_price as p ON i.item_id = p.item_id
+		WHERE 1=1
+				<choose>
+					<when test="searchCondition2 != null and searchCondition2 != ''">
+						 AND <![CDATA[ p.deal_date < ]]>date_format(#{searchCondition2},'%Y%m%d') ORDER BY p.deal_date DESC, i.item_id ASC
+					</when>
+				</choose>
+		LIMIT #{recordCountPerPage} OFFSET #{firstIndex}
+	</select>
+	
+	<select id="selectSampleList3" resultMap="sample">
+	SELECT
+		item_id
+		, price_avg5
+		, price_avg10
+		, price_avg20
+		, price_avg60
+		, price_avg_120
+		, price_close
+		, volume
+		, volume_avg5
+		, volume_avg20
+		, volume_avg60
+		, volume_avg120
+		, date_format(deal_date,'%Y') as year
+		, date_format(deal_date,'%m') as month
+		, date_format(deal_date,'%d') as day
+		, deal_date
+		FROM item_price
+		WHERE 1=1
+		AND item_id = #{itemId}
+		AND date_format(deal_date,'%Y%m%d')
+		BETWEEN date_format(DATE_ADD(#{dealDate},INTERVAL -3 MONTH), '%Y%m%d')
+		AND date_format(#{dealDate},'%Y%m%d')
+			   <choose>
+					<when test="calender == 'bbb'">
+						 AND DAYOFWEEK(deal_date) = 6
+					</when>
+				</choose>
+				<choose>
+					<when test="calender == 'ccc'">
+						AND date_format(deal_date,'%Y%m%d')
+							BETWEEN DATE_FORMAT(DATE_SUB(#{dealDate},INTERVAL -3 MONTH), '%Y%m%d')
+						AND date_format(#{dealDate},'%Y%m%d')
+				        	group by month
+						ORDER BY year,month,day ASC
+					</when>
+				</choose>
+			   ORDER BY deal_date ASC;
+	</select>
+	
+	<select id="tableAvg" resultMap="sample">
+		SELECT
+			date(deal_date) deal_date
+			,price_close
+			, ROUND((CASE
+			WHEN
+			5 = COUNT(*)
+			OVER (ORDER BY deal_date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW)
+			THEN
+			AVG(SUM(price_close))
+			OVER (ORDER BY deal_date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW)
+			END), 2)
+			AS price_avg5
+			, ROUND((CASE
+			WHEN
+			10 = COUNT(*)
+			OVER (ORDER BY deal_date ROWS BETWEEN 9 PRECEDING AND CURRENT ROW)
+			THEN
+			AVG(SUM(price_close))
+			OVER (ORDER BY deal_date ROWS BETWEEN 9 PRECEDING AND CURRENT ROW)
+			END), 2)
+			AS price_avg10
+			, ROUND((CASE
+			WHEN
+			20 = COUNT(*)
+			OVER (ORDER BY deal_date ROWS BETWEEN 19 PRECEDING AND CURRENT ROW)
+			THEN
+			AVG(SUM(price_close))
+			OVER (ORDER BY deal_date ROWS BETWEEN 19 PRECEDING AND CURRENT ROW)
+			END), 2)
+			AS price_avg20
+			, ROUND((CASE
+			WHEN
+			60 = COUNT(*)
+			OVER (ORDER BY deal_date ROWS BETWEEN 59 PRECEDING AND CURRENT ROW)
+			THEN
+			AVG(SUM(price_close))
+			OVER (ORDER BY deal_date ROWS BETWEEN 59 PRECEDING AND CURRENT ROW)
+			END), 2)
+			AS price_avg60
+			,volume
+			, ROUND((CASE
+			WHEN
+			5 = COUNT(*)
+			OVER (ORDER BY deal_date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW)
+			THEN
+			AVG(SUM(volume))
+			OVER (ORDER BY deal_date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW)
+			END), 2)
+			AS volume_avg5
+			, ROUND((CASE
+			WHEN
+			20 = COUNT(*)
+			OVER (ORDER BY deal_date ROWS BETWEEN 19 PRECEDING AND CURRENT ROW)
+			THEN
+			AVG(SUM(volume))
+			OVER (ORDER BY deal_date ROWS BETWEEN 19 PRECEDING AND CURRENT ROW)
+			END), 2)
+			AS volume_avg20
+			, ROUND((CASE
+			WHEN
+			60 = COUNT(*)
+			OVER (ORDER BY deal_date ROWS BETWEEN 59 PRECEDING AND CURRENT ROW)
+			THEN
+			AVG(SUM(volume))
+			OVER (ORDER BY deal_date ROWS BETWEEN 59 PRECEDING AND CURRENT ROW)
+			END), 2)
+			AS volume_avg60
+		
+			FROM item_price
+			where item_id = #{itemId}
+				AND date_format(deal_date,'%Y%m%d')
+					BETWEEN date_format(DATE_ADD(#{dealDate},INTERVAL -3 year), '%Y%m%d')
+				AND date_format(#{dealDate},'%Y%m%d')
+			GROUP BY deal_date, price_close, volume
+			ORDER BY deal_date DESC
+			limit 10
+	</select>
+	
+	<select id="tablelist" resultMap="sample">
+		SELECT
+			item_id
+			, item_name
+			, deal_date
+			, price_open
+			, price_high
+			, price_low
+			, price_close
+			, floor(volume) volume
+			, compared1
+			, compared2
+			, compared3
+			, ROUND(((price_close-compared2) / compared2 *100),2) as fluctuation
+			FROM(select
+					i.item_id
+					, i.item_name
+					, p.deal_date
+					, p.price_open
+					, p.price_high
+					, p.price_low
+					, p.price_close
+					, volume
+					, lag(p.deal_date,1) over(partition by i.item_id order by p.deal_date) as compared1
+					, lag(p.price_close,1) over(partition by i.item_id order by p.deal_date) as compared2
+					, p.price_close - lag(p.price_close,1) over(partition by i.item_id order by p.deal_date) as compared3
+					from
+					item as i
+					JOIN item_price as p
+					on i.item_id = p.item_id
+			) t1
+			WHERE 1=1
+		        <choose>
+		            <when test="searchCondition == 2">
+		            	  AND	(item_name LIKE CONCAT('%', #{searchKeyword}, '%') OR item_id LIKE CONCAT('%', #{searchKeyword}, '%'))
+					</when>
+					<otherwise>
+					 	 AND   deal_date = '20200131'
+		           </otherwise>
+				</choose>
+				limit 20
+	</select>
+	
+
+	<select id="selectSampleListTotCnt" parameterType="searchVO" resultType="int">
+	select count(*) totcnt
+		from
+		item as i
+		join item_price as p
+		on i.item_id = p.item_id
+		where 1=1
+	   <choose>
+			<when test="searchCondition2 != null and searchCondition2 != ''">
+				 AND  DATE_FORMAT(p.deal_date, '%Y%m%d') = #{searchCondition2}
+			</when>
+		</choose>
+	</select>
+
+</mapper>
